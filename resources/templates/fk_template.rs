@@ -1,70 +1,165 @@
-<<<<<<< HEAD
 #![expect(
     clippy::too_many_lines,
     clippy::cognitive_complexity,
     clippy::unreadable_literal,
     clippy::collapsible_if,
     clippy::excessive_precision,
-    clippy::suspicious_operation_groupings
 )]
+#![feature(portable_simd)]
 
 use core::simd::Simd;
 
 use carom_core::{
-    cos, env::World3d, sin, sphere_environment_in_collision, sphere_sphere_self_collision,
+    Attach, Block, Collide3, PosedAttachment, Robot, SimdArithmetic, cos, sin,
+    sphere_environment_in_collision, sphere_sphere_self_collision,
 };
 
-pub const DIM: usize = {{n_q}};
+#[derive(Clone, Copy, Debug)]
+pub struct {{name}};
 
-pub const JOINT_NAMES: [&str; DIM] = ["{{join(joint_names, "\", \"")}}"];
-pub const END_EFFECTOR_NAME: &str = "{{end_effector}}";
+const DIM: usize = {{n_q}};
 
-pub const BOUND_LOWER: [f32; DIM] = [{{join(bound_lower, ", ")}}];
+impl {{name}} {
+    /// The configuration-space dimension of this robot.
+    pub const DIM: usize = DIM;
 
-pub const BOUND_SCALE: [f32; DIM] = [{{join(bound_range, ", ")}}];
+    pub const BOUNDS: [[f32; DIM]; 2] = [
+        Self::BOUND_LOWER,
+        make_upper(Self::BOUND_LOWER, Self::BOUND_SCALE),
+    ];
 
-pub const RESOLUTION: usize = {{resolution}};
+    pub const STEP_SIZE: f32 = 1.0 / {{resolution}}f32;
 
-pub const MIN_RADIUS: f32 = {{min_radius}};
-pub const MAX_RADIUS: f32 = {{max_radius}};
+    pub const JOINT_NAMES: [&str; DIM] = ["{{join(joint_names, "\", \"")}}"];
+    pub const END_EFFECTOR_NAME: &str = "{{end_effector}}";
 
-#[expect(
-    clippy::too_many_lines,
-    clippy::cognitive_complexity,
-    clippy::unreadable_literal,
-    clippy::collapsible_if,
-    clippy::excessive_precision,
-    clippy::suspicious_operation_groupings
-)]
-pub fn fkcc<const L: usize>(x: &super::ConfigurationBlock<L>, environment: &World3d<f32>) -> bool {
-=======
-use core::simd::Simd;
+    pub const BOUND_LOWER: [f32; DIM] = [{{join(bound_lower, ", ")}}];
 
-use elain::{Align, Alignment};
+    pub const BOUND_SCALE: [f32; DIM] = [{{join(bound_range, ", ")}}];
 
-use crate::{
-    env::World3d,
-    robot::{sphere_environment_in_collision, sphere_sphere_self_collision},
-    cos, sin,
-};
+    pub const RESOLUTION: usize = {{resolution}};
 
-#[expect(
-    non_snake_case,
-    clippy::too_many_lines,
-    clippy::cognitive_complexity,
-    clippy::unreadable_literal,
-    clippy::approx_constant,
-    clippy::collapsible_if
-)]
-pub fn fkcc<const L: usize>(x: &super::ConfigurationBlock<L>, environment: &World3d<f32, L>) -> bool
+    pub const MIN_RADIUS: f32 = {{min_radius}};
+    pub const MAX_RADIUS: f32 = {{max_radius}};
+}
+
+const fn make_upper(lower: [f32; DIM], scale: [f32; DIM]) -> [f32; DIM] {
+    let mut ret = [0.0; DIM];
+    let mut i = 0;
+    while i < DIM {
+        ret[i] = lower[i] + scale[i];
+        i += 1;
+    }
+    ret
+}
+
+type ConfigurationBlock<const L: usize> = [Simd<f32, L>; {{name}}::DIM];
+
+impl<W> Robot<DIM, f32, W> for {{name}}
 where
-    Align<L>: Alignment,
+    W: Collide3<f32>,
 {
->>>>>>> 3576dba (feat: support Rust code generation in cricket)
+    fn is_valid<const L: usize>(&self, cfgs: &Block<{ Self::DIM }, L, f32>, world: &W) -> bool
+    where
+        Simd<f32, L>: SimdArithmetic<f32, L>,
+    {
+        fkcc(&cfgs.0, world)
+    }
+
+    fn bounds(&self) -> [[f32; DIM]; 2] {
+        Self::BOUNDS
+    }
+
+    fn name(&self) -> &'static str {
+        "{{lower(name)}}"
+    }
+}
+
+
+impl<W> Attach<DIM, f32, W> for {{name}}
+where
+    W: Collide3<f32>,
+{
+    fn is_valid_attach<const L: usize>(
+        &self,
+        cfgs: &Block<DIM, L, f32>,
+        world: &W,
+        attachment: &mut PosedAttachment<f32, L>,
+    ) -> bool
+    where
+        Simd<f32, L>: crate::SimdArithmetic<f32, L>,
+    {
+        attach_fkcc(&cfgs.0, world, attachment)
+    }
+}
+
+
+fn fkcc<const L: usize>(x: &ConfigurationBlock<L>, environment: &impl Collide3<f32>) -> bool {
+>>>>>>> Stashed changes
+>>>>>>> 996ae5d (feat: running Rust FK/CC code for existing carom robots)
     let mut v = [Simd::splat(0.0); {{ccfk_code_vars}}];
     let mut y = [Simd::splat(0.0); {{ccfk_code_output}}];
 
     {{ccfk_code}}
     {% include "ccfk" %}
+    true
+}
+
+
+fn attach_fkcc<const L: usize>(
+    x: &ConfigurationBlock<L>,
+    environment: &impl Collide3<f32>,
+    attachment: &mut PosedAttachment<f32, L>,
+) -> bool {
+    let mut v = [Simd::splat(0.0); {{ccfkee_code_vars}}];
+    let mut y = [Simd::splat(0.0); {{ccfkee_code_output}}];
+
+    {{ccfkee_code}}
+    {% include "ccfk" %}
+
+    // attaching at {{ end_effector }}
+    attachment.set_pose_pr(
+        y[{{ccfkee_code_output - 12}}..{{ccfkee_code_output - 9}}].as_array().unwrap(),
+        y[{{ccfkee_code_output - 9}}..{{ccfkee_code_output}}].as_array().unwrap()
+    );
+
+    //
+    // attachment vs. environment collisions
+    //
+    if attachment.environment_collision(environment)
+    {
+        return false;
+    }
+
+    //
+    // attachment vs. robot collisions
+    //
+
+    {% for i in range(length(end_effector_collisions)) %}
+    {% set link_index = at(end_effector_collisions, i) %}
+    {% set link_bs = at(bounding_sphere_index, link_index) %}
+    {% set link_spheres = at(per_link_spheres, link_index) %}
+
+    // Attachment vs. {{ at(link_names, link_index )}}
+    if attachment.sphere_collision(
+        y[{{(n_spheres + link_bs) * 4 + 0}}],
+        y[{{(n_spheres + link_bs) * 4 + 1}}],
+        y[{{(n_spheres + link_bs) * 4 + 2}}],
+        y[{{(n_spheres + link_bs) * 4 + 3}}]
+    ) {
+        {% for j in range(length(link_spheres)) %}
+        {% set sphere_index = at(link_spheres, j) %}
+        if attachment.sphere_collision(
+            y[{{sphere_index * 4 + 0}}],
+            y[{{sphere_index * 4 + 1}}],
+            y[{{sphere_index * 4 + 2}}],
+            y[{{sphere_index * 4 + 3}}]
+        ) {
+            return false;
+        }
+        {% endfor %}
+    }
+    {% endfor %}
+
     true
 }
