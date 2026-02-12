@@ -10,7 +10,7 @@
 use core::simd::Simd;
 
 use carom_core::{
-    Attach, Block, Collide3, PosedAttachment, Robot, SimdArithmetic, cos, sin,
+    Attach, Ball, Block, Collide3, PosedAttachment, Robot, SimdArithmetic, cos, sin,
     sphere_environment_in_collision, sphere_sphere_self_collision,
 };
 
@@ -73,6 +73,14 @@ where
     fn name(&self) -> &'static str {
         "{{lower(name)}}"
     }
+
+    fn sphere_fk<const L: usize>(
+        &self,
+        cfgs: &Block<{ Self::DIM }, L, f32>,
+        spheres: &mut Vec<Ball<3, Simd<f32, L>>>,
+    ) {
+        sphere_fk(&cfgs.0, spheres);
+    }
 }
 
 
@@ -95,8 +103,6 @@ where
 
 
 fn fkcc<const L: usize>(x: &ConfigurationBlock<L>, environment: &impl Collide3<f32>) -> bool {
->>>>>>> Stashed changes
->>>>>>> 996ae5d (feat: running Rust FK/CC code for existing carom robots)
     let mut v = [Simd::splat(0.0); {{ccfk_code_vars}}];
     let mut y = [Simd::splat(0.0); {{ccfk_code_output}}];
 
@@ -162,4 +168,19 @@ fn attach_fkcc<const L: usize>(
     {% endfor %}
 
     true
+}
+
+fn sphere_fk<const L: usize>(x: &ConfigurationBlock<L>, spheres: &mut Vec<Ball<3, Simd<f32, L>>>)
+{
+    let mut v = [Simd::splat(0.0); {{spherefk_code_vars}}];
+    let mut y = [Simd::splat(0.0); {{spherefk_code_output}}];
+
+    {{spherefk_code}}
+
+    for &[x, y, z, r] in y.as_chunks().0 {
+        spheres.push(Ball {
+            pos: [x, y, z],
+            r,
+        });
+    }
 }
