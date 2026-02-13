@@ -33,11 +33,10 @@ impl {{name}} {
     pub const JOINT_NAMES: [&str; DIM] = ["{{join(joint_names, "\", \"")}}"];
     pub const END_EFFECTOR_NAME: &str = "{{end_effector}}";
 
-    pub const BOUND_LOWER: [f32; DIM] = [{{join(bound_lower, ", ")}}];
+    const BOUND_LOWER: [f32; DIM] = [{{join(bound_lower, ", ")}}];
+    const BOUND_SCALE: [f32; DIM] = [{{join(bound_range, ", ")}}];
 
-    pub const BOUND_SCALE: [f32; DIM] = [{{join(bound_range, ", ")}}];
-
-    pub const RESOLUTION: usize = {{resolution}};
+    const RESOLUTION: usize = {{resolution}};
 
     pub const MIN_RADIUS: f32 = {{min_radius}};
     pub const MAX_RADIUS: f32 = {{max_radius}};
